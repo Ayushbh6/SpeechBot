@@ -80,9 +80,14 @@ export default function VoiceAgent() {
       const session = await fetchSession()
       console.log('Session info:', session)
       // Open WebSocket connection to the realtime session
-      // The realtime API may return 'url' or 'ws_url' as the WebSocket endpoint
-      const wsEndpoint = session.ws_url || session.url
-      if (!wsEndpoint) throw new Error('Missing WebSocket URL in session response')
+      // Determine WebSocket endpoint: prefer ws_url, then url, else construct manually
+      let wsEndpoint = session.ws_url || session.url
+      if (!wsEndpoint) {
+        // Fallback: use session.id and session.client_secret.value (session_token)
+        const token = session.client_secret?.value || session.session_token
+        wsEndpoint = `wss://api.openai.com/v1/realtime/sessions/${session.id}?session_token=${token}`
+        console.warn('Using fallback wsEndpoint:', wsEndpoint)
+      }
       const socket = new WebSocket(wsEndpoint)
       socketRef.current = socket
       socket.addEventListener('open', () => {
