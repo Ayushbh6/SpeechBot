@@ -3,6 +3,19 @@ import { useState, useRef } from 'react'
 import { FaMicrophone, FaMicrophoneSlash } from 'react-icons/fa'
 import { fetchSession } from '../lib/session'
 
+/**
+ * Convert a Float32Array buffer to an ArrayBuffer of 16-bit PCM little-endian.
+ */
+function float32ToInt16(buffer) {
+  const l = buffer.length
+  const int16 = new Int16Array(l)
+  for (let i = 0; i < l; i++) {
+    let s = Math.max(-1, Math.min(1, buffer[i]))
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
+  }
+  return int16.buffer
+}
+
 export default function VoiceAgent() {
   const [isSessionActive, setIsSessionActive] = useState(false)
   // Track if user has interacted to unmute audio
@@ -53,9 +66,15 @@ export default function VoiceAgent() {
       processor.onaudioprocess = (e) => {
         const data = e.inputBuffer.getChannelData(0)
         console.log('Audio chunk', data)
+        // Send PCM data as 16-bit to WebSocket
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          const int16 = float32ToInt16(data)
+          socketRef.current.send(int16)
+        }
       }
       source.connect(processor)
-      processor.connect(audioContext.destination)
+      // Do not connect processor to destination to avoid feedback
+      // processor.connect(audioContext.destination)
       
       // Proceed to establish session
       const session = await fetchSession()
@@ -67,7 +86,17 @@ export default function VoiceAgent() {
         console.log('WebSocket open')
         // Send the system prompt first
         sendSystemPrompt()
-        // TODO: attach RTC/data channel
+        // Signal start of audio stream
+        const startEvent = {
+          type: 'audio.start',
+          audio: {
+            encoding: 'linear16',
+            sample_rate: audioContext.sampleRate,
+            channels: 1
+          }
+        }
+        console.log('Sending audio.start', startEvent)
+        socket.send(JSON.stringify(startEvent))
       })
       socket.addEventListener('message', evt => {
         // Handle text vs. binary frames
@@ -100,6 +129,13 @@ export default function VoiceAgent() {
   function stopSession() {
     // Close WebSocket connection if exists
     if (socketRef.current) {
+      // Signal end of audio stream
+      try {
+        socketRef.current.send(JSON.stringify({ type: 'audio.stop' }))
+        console.log('Sent audio.stop')
+      } catch (e) {
+        console.warn('Failed to send audio.stop', e)
+      }
       socketRef.current.close()
       socketRef.current = null
       console.log('WebSocket closed')
