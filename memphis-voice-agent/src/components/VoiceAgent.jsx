@@ -1,5 +1,6 @@
 "use client"
 import { useState, useRef } from 'react'
+import { FaMicrophone, FaMicrophoneSlash } from 'react-icons/fa'
 import { fetchSession } from '../lib/session'
 
 export default function VoiceAgent() {
@@ -107,12 +108,20 @@ export default function VoiceAgent() {
   }
 
   return (
-    <div>
-      <button onClick={isSessionActive ? stopSession : startSession}>
-        {isSessionActive ? 'Stop' : 'Start'} Voice Agent
+    <div className="fixed bottom-4 right-4 z-50">
+      <button
+        onClick={isSessionActive ? stopSession : startSession}
+        className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 focus:outline-none"
+        aria-label={isSessionActive ? 'Stop Voice Agent' : 'Start Voice Agent'}
+      >
+        {isSessionActive ? (
+          <FaMicrophoneSlash size={24} />
+        ) : (
+          <FaMicrophone size={24} />
+        )}
       </button>
-      {/* Audio element for model TTS playback */}
-      <audio ref={audioRef} autoPlay muted={!userInteracted} />
+      {/* Hidden audio element for model TTS playback */}
+      <audio ref={audioRef} autoPlay muted={!userInteracted} className="hidden" />
     </div>
   )
 }
