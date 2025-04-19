@@ -4,9 +4,13 @@ import { fetchSession } from '../lib/session'
 
 export default function VoiceAgent() {
   const [isSessionActive, setIsSessionActive] = useState(false)
+  // Track if user has interacted to unmute audio
+  const [userInteracted, setUserInteracted] = useState(false)
 
   // Ref to hold the WebSocket instance across renders
   const socketRef = useRef(null)
+  // Ref to audio element for TTS playback
+  const audioRef = useRef(null)
 
   /**
    * Send the Memphis AI system prompt as the first message.
@@ -36,6 +40,23 @@ export default function VoiceAgent() {
 
   async function startSession() {
     try {
+      // Mark that the user has interacted (for audio unmute)
+      setUserInteracted(true)
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      console.log('Mic stream obtained', stream)
+      // Analyze audio input for logging
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      const source = audioContext.createMediaStreamSource(stream)
+      const processor = audioContext.createScriptProcessor(4096, 1, 1)
+      processor.onaudioprocess = (e) => {
+        const data = e.inputBuffer.getChannelData(0)
+        console.log('Audio chunk', data)
+      }
+      source.connect(processor)
+      processor.connect(audioContext.destination)
+      
+      // Proceed to establish session
       const session = await fetchSession()
       console.log('Session info:', session)
       // Open WebSocket connection to the realtime session
@@ -48,7 +69,26 @@ export default function VoiceAgent() {
         // TODO: attach RTC/data channel
       })
       socket.addEventListener('message', evt => {
-        console.log('WS message', evt.data)
+        // Handle text vs. binary frames
+        if (typeof evt.data === 'string') {
+          console.log('WS message', evt.data)
+        } else if (evt.data instanceof Blob) {
+          console.log('WS binary message (Blob)', evt.data)
+          // Play TTS audio blob
+          const url = URL.createObjectURL(evt.data)
+          if (audioRef.current) {
+            audioRef.current.src = url
+            audioRef.current.play().catch((err) => console.error('Audio play error', err))
+          }
+        } else if (evt.data instanceof ArrayBuffer) {
+          console.log('WS binary message (ArrayBuffer)', evt.data)
+          const blob = new Blob([evt.data], { type: 'audio/webm; codecs=opus' })
+          const url = URL.createObjectURL(blob)
+          if (audioRef.current) {
+            audioRef.current.src = url
+            audioRef.current.play().catch((err) => console.error('Audio play error', err))
+          }
+        }
       })
       setIsSessionActive(true)
     } catch (err) {
@@ -71,6 +111,8 @@ export default function VoiceAgent() {
       <button onClick={isSessionActive ? stopSession : startSession}>
         {isSessionActive ? 'Stop' : 'Start'} Voice Agent
       </button>
+      {/* Audio element for model TTS playback */}
+      <audio ref={audioRef} autoPlay muted={!userInteracted} />
     </div>
   )
 }
