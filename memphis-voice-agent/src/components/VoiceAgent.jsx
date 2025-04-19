@@ -80,7 +80,10 @@ export default function VoiceAgent() {
       const session = await fetchSession()
       console.log('Session info:', session)
       // Open WebSocket connection to the realtime session
-      const socket = new WebSocket(session.ws_url)
+      // The realtime API may return 'url' or 'ws_url' as the WebSocket endpoint
+      const wsEndpoint = session.ws_url || session.url
+      if (!wsEndpoint) throw new Error('Missing WebSocket URL in session response')
+      const socket = new WebSocket(wsEndpoint)
       socketRef.current = socket
       socket.addEventListener('open', () => {
         console.log('WebSocket open')
