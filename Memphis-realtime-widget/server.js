@@ -22,7 +22,7 @@ app.get(process.env.TOKEN_PATH || '/token', async (req, res) => {
     const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gpt-4o-realtime-preview-2024-12-17', voice: 'verse' })
+      body: JSON.stringify({ model: 'gpt-4o-mini-realtime-preview-2024-12-17', voice: 'verse' })
     });
     const data = await response.json();
     res.json(data);
